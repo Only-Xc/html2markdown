@@ -13,11 +13,11 @@ import type { BookSummary } from "@/lib/books/types";
 import { useThemeMode } from "@/lib/use-theme";
 
 const COVER_STYLES = [
-  "bg-[#eef4ff] text-[#163d7a]",
-  "bg-[#edf3fb] text-[#21476f]",
-  "bg-[#f1f6ff] text-[#234a74]",
-  "bg-[#edf5ff] text-[#17416d]",
-  "bg-[#eff5fd] text-[#1f466f]",
+  "bg-[linear-gradient(180deg,#eef4ff_0%,#dce9ff_100%)] text-[#163d7a] dark:bg-[linear-gradient(180deg,#16304f_0%,#0f2138_100%)] dark:text-[#e7f0ff]",
+  "bg-[linear-gradient(180deg,#edf3fb_0%,#dfe9f7_100%)] text-[#21476f] dark:bg-[linear-gradient(180deg,#1b3451_0%,#11253d_100%)] dark:text-[#e5efff]",
+  "bg-[linear-gradient(180deg,#f1f6ff_0%,#dbe7ff_100%)] text-[#234a74] dark:bg-[linear-gradient(180deg,#173557_0%,#10243c_100%)] dark:text-[#ecf3ff]",
+  "bg-[linear-gradient(180deg,#edf5ff_0%,#d8e7fb_100%)] text-[#17416d] dark:bg-[linear-gradient(180deg,#143251_0%,#0f2036_100%)] dark:text-[#e7f1ff]",
+  "bg-[linear-gradient(180deg,#eff5fd_0%,#dde8f5_100%)] text-[#1f466f] dark:bg-[linear-gradient(180deg,#1a3552_0%,#12243a_100%)] dark:text-[#e8f1ff]",
 ];
 
 export default function BookShelf() {
@@ -58,7 +58,7 @@ export default function BookShelf() {
       setCreateDraft("");
       setCreateModalOpen(false);
       message.success("书籍已创建。");
-      router.push(`/books/${book.id}`);
+      router.push(`/?bookId=${encodeURIComponent(book.id)}`);
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : "创建书籍失败。");
     } finally {
@@ -105,7 +105,7 @@ export default function BookShelf() {
       const importedBook = await repository.importBookBackup(backup);
       await loadBooks();
       message.success(`《${importedBook.title}》已导入书架。`);
-      router.push(`/books/${importedBook.id}`);
+      router.push(`/?bookId=${encodeURIComponent(importedBook.id)}`);
     } catch (importError) {
       setError(importError instanceof Error ? importError.message : "导入书籍失败。");
     } finally {
@@ -211,7 +211,7 @@ export default function BookShelf() {
                 className="group aspect-[3/4] cursor-pointer rounded-[28px] border border-dashed border-blue-200 bg-white p-4 text-left transition hover:-translate-y-1 hover:border-blue-300 dark:border-[#24456d] dark:bg-[#0f1c31] dark:hover:border-blue-300/40"
                 onClick={() => setCreateModalOpen(true)}
               >
-                <div className="flex h-full flex-col justify-between rounded-[22px] border border-blue-100 bg-[#f7faff] p-5 dark:border-[#24456d] dark:bg-[#12243e]">
+                <div className="flex h-full flex-col justify-between rounded-[22px] border border-blue-100 bg-[#f7faff] p-5 dark:border-[#2b4b73] dark:bg-[linear-gradient(180deg,#142844_0%,#102136_100%)]">
                   <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-200">
                     <Plus className="size-5" />
                   </div>
@@ -229,7 +229,7 @@ export default function BookShelf() {
               {books.map((book, index) => (
                 <article
                   key={book.id}
-                  className="group relative overflow-hidden rounded-[28px] border border-blue-100 bg-white p-3 transition hover:-translate-y-1 dark:border-[#1e3556] dark:bg-[#0f1c31]"
+                  className="group relative overflow-hidden rounded-[28px] border border-blue-100 bg-white p-3 transition hover:-translate-y-1 hover:shadow-[0_18px_32px_-28px_rgba(37,99,235,0.45)] dark:border-[#1e3556] dark:bg-[#0f1c31] dark:hover:border-[#335784] dark:hover:shadow-[0_20px_44px_-30px_rgba(0,0,0,0.8)]"
                 >
                   <button
                     type="button"
@@ -241,21 +241,21 @@ export default function BookShelf() {
                     <Trash2 className="size-4" />
                   </button>
 
-                  <Link href={`/books/${book.id}`} className="block">
+                  <Link href={`/?bookId=${encodeURIComponent(book.id)}`} className="block">
                     <div className={`aspect-[3/4] rounded-[24px] ${COVER_STYLES[index % COVER_STYLES.length]} p-3`}>
-                      <div className="flex h-full flex-col justify-between rounded-[18px] border border-blue-100 bg-white p-5 dark:border-[#24456d] dark:bg-[#12243e] dark:text-white">
+                      <div className="flex h-full flex-col justify-between rounded-[18px] border border-blue-100 bg-white/90 p-5 backdrop-blur-[1px] dark:border-[#355981] dark:bg-[linear-gradient(180deg,rgba(10,21,37,0.78)_0%,rgba(15,29,48,0.92)_100%)] dark:text-white">
                         <div className="flex items-center justify-between">
-                          <div className="text-[10px] font-semibold uppercase tracking-[0.32em] text-blue-600 dark:text-blue-200">
+                          <div className="text-[10px] font-semibold uppercase tracking-[0.32em] text-blue-600 dark:text-[#b9d3ff]">
                             WeRead style
                           </div>
-                          <ArrowUpRight className="size-4 text-blue-500 dark:text-blue-200" />
+                          <ArrowUpRight className="size-4 text-blue-500 dark:text-[#c5daff]" />
                         </div>
                         <div className="space-y-3">
-                          <div className="h-px w-14 bg-blue-200 dark:bg-blue-200/30" />
+                          <div className="h-px w-14 bg-blue-200 dark:bg-[#7ea7e7]/35" />
                           <div className="max-w-[11ch] text-[28px] font-semibold leading-[1.18] tracking-tight [text-wrap:balance]">
                             {book.title}
                           </div>
-                          <div className="text-xs text-slate-500 dark:text-slate-300">
+                          <div className="text-xs text-slate-500 dark:text-[#b3c7e6]">
                             点击进入章节工作台
                           </div>
                         </div>
