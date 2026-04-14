@@ -1,168 +1,349 @@
 # html2md 设计文档
 
-**创建日期：** 2026-03-17
+**更新日期：** 2026-04-14
 
 ## 背景与目标
 
-当前仓库缺少一个可复用的命令行工具来将 HTML 内容稳定地转换为 Markdown。为了支持单文件处理和批量文档迁移，需要引入明确的 CLI 接口、可预期的输出规则，以及适合脚本化使用的错误处理行为。
+当前项目已经从“单文件 HTML 转 Markdown 页面”演进为一个面向单用户、本机浏览器使用的书籍管理器。它的核心目标不再是一次性转换单个 HTML，而是帮助用户把多章 HTML 内容沉淀为一本结构化书籍，并在保存时持续生成 Markdown，最终打包导出。
 
 **目标：**
-- 提供一个 `html2md` CLI，支持单文件与批量目录两种模式
-- 将 HTML 转 Markdown 的规则集中在单独的转换模块中，保证 CLI 层只负责 I/O 和流程控制
-- 在批量模式下保留目录结构、跟随符号链接并避免循环递归
-- 提供稳定的退出码和错误输出，便于脚本与 CI 调用
+- 提供一个本地书架，用于创建、进入、删除书籍
+- 提供单本书工作台，用于管理章节、编辑 HTML、预览 Markdown
+- 在章节保存时自动调用转换器生成派生 Markdown
+- 支持整本书导出为 zip，内含章节 Markdown、`README.md`、`toc.json` 与完整备份 `book.json`
+- 支持通过单个 `book.json` 将整本书重新导入书架并继续编辑
+- 在视觉上保持“阅读产品”而非“开发工具”的体验，采用蓝白主色、扁平化、内容优先的设计
 
 **非目标：**
-- 不实现增量同步、监听目录或并行转换
-- 不保留任意 HTML 标签的原始结构，只保留规范中列出的可映射语义和文本内容
-- 不构建编译产物发布流程，以 `tsx` 直接执行源码为主
+- 不支持登录、多用户、云同步或协作编辑
+- 不支持 Markdown 反向编辑 HTML
+- 不支持卷/章多级嵌套，章节结构保持单层有序列表
+- 不引入服务端数据库或文件持久化
 
 ## 技术栈
 
+- **框架：** Next.js App Router
 - **语言：** TypeScript
-- **运行时：** Node.js，使用 `tsx` 直接执行（无需编译）
+- **运行时：** React 19 + Next.js 15
+- **样式：**
+  - Tailwind CSS 4
+  - 自定义 CSS 变量主题
+  - Ant Design 用于模态框与消息提示
 - **核心库：**
-  - `turndown` — HTML 转 Markdown
-  - `turndown-plugin-gfm` — GFM 扩展（表格、删除线、任务列表）
-  - `commander` — CLI 参数解析
+  - `turndown`
+  - `turndown-plugin-gfm`
+  - `jszip`
 
-## CLI 接口
+## 信息架构
 
-```bash
-# 使用默认目录（./input → ./output）
-html2md
+### `/`
 
-# 指定目录
-html2md -i ./my-html -o ./my-md
+首页为书架页，负责：
+- 展示全部书籍
+- 新建书籍
+- 导入 `book.json`
+- 删除书籍
+- 进入单本书工作台
 
-# 单文件，输出到指定文件
-html2md input.html -o output.md
+### `/books/[bookId]`
 
-# 单文件，未指定 -o 时输出到 stdout
-html2md input.html
-```
+书籍工作台负责：
+- 展示书名与基础操作
+- 管理章节列表
+- 编辑当前章节 HTML
+- 预览当前章节 Markdown
+- 导出整本书
 
-### 参数说明
+### `/api/convert`
 
-| 参数 | 简写 | 默认值 | 说明 |
-|------|------|--------|------|
-| 位置参数（可选） | — | 无 | 单文件模式的输入文件路径，与 `-i` 互斥 |
-| `--input` | `-i` | `./input` | 输入目录路径（批量模式） |
-| `--output` | `-o` | `./output`（批量）/ 无（单文件） | 输出目录或文件路径 |
+保留现有转换 API，用于兼容纯转换调用场景。书籍工作台主流程默认直接复用前端 `convert()`，不依赖该接口。
 
-### 模式判断规则
+## 数据模型
 
-- 提供**位置参数**：进入单文件模式
-  - 同时提供 `-i`：打印错误 `Cannot use positional argument and -i together`，退出码 1
-  - `-o` 未指定：输出到 stdout
-  - `-o` 为已存在目录：输出 `<dir>/<inputName>.md`
-  - `-o` 为不存在且无扩展名路径：视为目录，自动创建，输出 `<dir>/<inputName>.md`
-  - `-o` 为文件路径（有扩展名或已存在文件）：直接写入该路径
-- 未提供位置参数：进入批量模式
+### `BookRecord`
 
-### 覆盖策略与编码
+- `id`
+- `title`
+- `createdAt`
+- `updatedAt`
 
-- 输出文件已存在时**直接覆盖**，不提示
-- 读取 HTML 文件统一使用 **UTF-8** 编码
+### `BookSummary`
+
+在 `BookRecord` 基础上增加：
+- `chapterCount`
+
+### `ChapterRecord`
+
+- `id`
+- `bookId`
+- `title`
+- `order`
+- `html`
+- `markdown`
+- `createdAt`
+- `updatedAt`
+
+### `ExportToc`
+
+- `title`
+- `exportedAt`
+- `chapters`
+
+`chapters` 内每项包含：
+- `order`
+- `title`
+- `fileName`
+
+### `BookBackupManifest`
+
+- `version`
+- `exportedAt`
+- `book`
+- `chapters`
+
+`book` 内包含：
+- `title`
+- `createdAt`
+- `updatedAt`
+
+`chapters` 内每项包含：
+- `title`
+- `order`
+- `html`
+- `markdown`
+- `createdAt`
+- `updatedAt`
+
+## 持久化设计
+
+### IndexedDB
+
+项目使用 IndexedDB 作为唯一持久化层，不引入后端存储。
+
+**对象存储：**
+- `books`
+- `chapters`
+
+**仓储职责：**
+- 查询书籍摘要
+- 创建、删除、重命名书籍
+- 导入整本书备份
+- 创建、删除、重命名章节
+- 调整章节顺序
+- 更新章节 HTML，并同步生成 Markdown
+
+### 设计原因
+
+- 满足单用户、本地使用场景
+- 降低部署复杂度
+- 保持导出功能纯前端可用
+
+## 核心交互流程
+
+### 1. 创建书籍
+
+用户在书架页点击“新建书籍”，通过模态框输入书名。确认后：
+- 生成书籍记录
+- 更新书架列表
+- 自动跳转到该书的工作台
+
+### 2. 创建与管理章节
+
+工作台左侧为章节管理区，支持：
+- 新建章节
+- 重命名章节
+- 删除章节
+- 上移、下移章节顺序
+
+章节采用单层顺序列表，不支持嵌套。
+
+### 3. 编辑与自动保存
+
+当前章节在右侧工作区编辑：
+- 编辑态：HTML 输入
+- 预览态：Markdown 预览
+
+每次输入变化后：
+- 若内容与持久化内容不同，则进入“未保存”状态
+- 经过 800ms 防抖后自动保存
+- 保存时调用 `convert(html)` 生成最新 Markdown
+- 保存成功后更新书籍 `updatedAt`
+
+切换章节前会先尝试冲刷待保存草稿，避免丢失。
+
+### 4. 导出整本书
+
+导出时：
+- 先冲刷当前草稿
+- 重新读取该书与全部章节
+- 生成 zip 文件
+
+zip 内内容：
+- 每章一个 `.md`
+- `README.md`
+- `toc.json`
+- `book.json`
+
+其中 `book.json` 保存整本书的完整编辑态数据，用于后续重新导入：
+- 书籍标题与时间戳
+- 各章节顺序
+- 各章节原始 HTML
+- 各章节派生 Markdown
+
+### 5. 导入整本书
+
+导入时：
+- 用户在书架页选择单个 `book.json`
+- 系统校验其结构与版本
+- 为导入结果生成新的书籍与章节 id
+- 将其写入 IndexedDB
+- 导入成功后自动进入该书的工作台
+
+章节文件命名规则：
+- `01-章节名.md`
+- `02-章节名.md`
+
+文件名会做安全清洗，并对重复标题追加序号。
 
 ## 模块设计
 
-### `converter.ts`
+### `src/lib/converter.ts`
 
-封装 turndown 实例（模块级单例），导出 `convert(html: string): string`。
+负责 HTML 转 Markdown 的纯字符串转换。
 
-**配置：**
-- `headingStyle: "atx"`、`codeBlockStyle: "fenced"`
-- 注册 `turndown-plugin-gfm` 插件
+**职责：**
+- 初始化 turndown 实例
+- 注册 GFM 插件
+- 处理 `pre` 代码块
+- 处理 `details/summary`
+- 移除样式、脚本、SVG 与平台代码块头部噪音
 
-**移除的节点（无输出）：**
-- `<style>`、`<script>`、`<noscript>`
-- SVG 节点
-- `.code-block-extension-header`（掘金/CSDN 等平台代码块头部 chrome）
+### `src/lib/books/model.ts`
 
-**自定义规则：**
+负责领域层纯逻辑：
+- 书名默认值规范化
+- 章节标题默认值规范化
+- 根据 HTML 生成更新后的章节 Markdown
 
-| 规则 | 匹配 | 输出 |
-|------|------|------|
-| `preformattedCode` | `<pre>` | 从 `<code class="language-*">` 提取语言标识，生成 fenced code block |
-| `details` | `<details>` | `<summary>` 内容 → `**加粗标题**`，其余内容递归转换后展开；无 `<summary>` 时直接展开 |
+### `src/lib/books/repository.ts`
 
-**支持的 HTML 元素：**
-- 标题 h1-h6、段落 p、换行 br
-- 有序/无序/嵌套列表 ol/ul/li
-- 链接 a、图片 img
-- 代码 code、代码块 pre
-- 表格 table/tr/td/th（GFM 格式）
-- 加粗 strong/b、斜体 em/i、删除线 del/s
-- 引用块 blockquote、分割线 hr
-- 无法映射的标签（div、span 等）：保留文本内容，丢弃标签
+负责 IndexedDB 仓储：
+- 书籍 CRUD
+- `book.json` 导入落库
+- 章节 CRUD
+- 排序与查询
+- HTML 保存时同步写入 Markdown
 
-### `batch.ts`
+### `src/lib/books/export.ts`
 
-**公共 API：**
-- `scanHtmlFiles(dir, onWarning?)` — 递归扫描，返回所有 `.html` 文件的绝对路径（已排序）
-- `resolveOutputPath(inputFile, inputDir, outputDir)` — 保留相对目录结构，`.html` → `.md`
-- `formatDisplayPath(targetPath, cwd?)` — 相对于 cwd 展示路径，超出则显示绝对路径
-- `processBatch(inputDir, outputDir)` — 主流程：扫描 → 串行转换 → 统计结果
+负责导出：
+- 章节文件名生成
+- `README.md` 内容生成
+- `toc.json` 生成
+- `book.json` 生成与解析
+- zip 打包
 
-**批量模式行为：**
-- 递归扫描跟随符号链接；通过 `realpath` + `Set<string>` 检测循环，发现时输出警告并跳过
-- 保留子目录结构：`input/docs/a.html` → `output/docs/a.md`
-- 输出目录不存在时自动创建；输出路径已存在且为普通文件时报错退出码 1
-- 进度输出到 **stderr**，格式：`[1/5] input/docs/a.html → output/docs/a.md`
-- 单文件失败时记录错误并继续；完成后打印汇总：`Done: X succeeded, Y failed`
+### `src/components/books/BookShelf.tsx`
 
-### `index.ts`
+负责书架页：
+- 书籍卡片渲染
+- 新建书籍模态框
+- 导入 `book.json`
+- 删除确认弹窗
 
-**公共 API：**
-- `resolveSingleFileOutputPath(inputFile, output)` — 处理目录/文件/不存在路径的判断逻辑
-- `main(argv?)` — CLI 主入口
+### `src/components/books/BookWorkspace.tsx`
 
-**职责：** 使用 `commander` 定义参数，判断模式，调用 `convert()` 或 `processBatch()`，处理单文件 I/O。
+负责工作台：
+- 书名修改
+- 章节列表交互
+- HTML 编辑与自动保存
+- Markdown 预览
+- 导出整本书
 
-## 错误处理
+### `src/components/HtmlEditor.tsx`
 
-| 场景 | 行为 | 退出码 |
-|------|------|--------|
-| 输入文件/目录不存在或无读权限 | 打印错误到 stderr | 1 |
-| 位置参数与 `-i` 同时使用 | 打印错误到 stderr | 1 |
-| 批量输出路径已存在且为普通文件 | 打印错误到 stderr | 1 |
-| 批量模式某文件失败 | 打印错误到 stderr，继续处理 | — |
-| 批量完成有失败文件 | `Done: X succeeded, Y failed` | 1 |
-| 批量完成全部成功 | `Done: X succeeded, 0 failed` | 0 |
-| 输入目录为空 | `No HTML files found in <dir>` | 0 |
-| 符号链接循环 | `Warning: Skipping cyclic symlink <path>` | — |
+负责 HTML 输入：
+- 文本编辑
+- 上传 `.html/.htm`
+- 拖拽导入
+- 清空内容
+
+### `src/components/MarkdownPreview.tsx`
+
+负责 Markdown 预览：
+- 预览渲染
+- 复制 Markdown
+- 下载当前 Markdown
+- 单章下载文件名跟随章节标题
+- 内容区域内部滚动
+
+## 视觉设计
+
+### 设计方向
+
+整体视觉参考阅读类产品，而不是后台管理系统：
+- 蓝白主色
+- 扁平化
+- 低装饰
+- 内容优先
+- 卡片与面板使用纯色底 + 细边框 + 少量阴影
+- Markdown 预览区域采用更接近书页阅读的排版节奏，保留列表符号、编号与层级
+
+### 色彩策略
+
+**浅色模式：**
+- 页面背景：极浅蓝灰
+- 面板背景：白色
+- 强调色：中蓝
+- 文本：深蓝灰
+
+**深色模式：**
+- 页面背景：深蓝黑
+- 面板背景：深蓝色块
+- 强调色：浅蓝
+- 文本：高对比浅色
+
+### 结构原则
+
+- 首页头部高度控制在较紧凑范围，不做大 Hero Landing
+- 工作台为固定视口布局，避免整页滚动造成阅读区不稳定
+- Markdown 预览滚动收敛到内容区内部
+- 章节选中状态必须一眼可辨
+
+### 深色模式策略
+
+项目使用 `.dark` class 驱动深色模式，而不是仅依赖系统媒体查询。
+
+**原因：**
+- 用户可显式切换
+- 组件层可保持主题一致
+- Ant Design 主题可跟随同步切换
 
 ## 设计决策
 
-### 1. 模块拆分为三个文件
+### 1. 保留转换核心，替换产品外壳
 
-`index.ts` 负责 CLI 和单文件 I/O，`converter.ts` 封装转换规则，`batch.ts` 负责批量流程。转换逻辑独立于文件系统，降低测试和扩展成本。
+转换器依然是产品核心能力，但从“单文件工具页”升级为“章节持久化工作流”的底层引擎。
 
-备选：将全部逻辑写在单文件中。未采用，耦合度高，后续修改风险大。
+### 2. 选择 IndexedDB 而不是服务端
 
-### 2. 使用 turndown + GFM 插件，并为 details/summary 添加自定义规则
+当前需求明确是本地单用户工具，IndexedDB 复杂度最低，且足够支持书籍与章节管理。
 
-标准库覆盖大部分映射，GFM 插件满足表格和任务列表。`details/summary` 通过自定义规则在转换阶段完成，避免在 CLI 层做额外 HTML 字符串处理。
+### 3. Markdown 只作为派生数据
 
-备选：手写完整转换器。未采用，维护成本过高。
+避免 HTML / Markdown 双向编辑导致状态冲突。HTML 是源数据，Markdown 是自动生成结果。
 
-### 3. 批量模式串行处理
+### 4. 导出 zip 采用轻量依赖
 
-串行执行保证 stderr 进度输出顺序与统计一致，实现复杂度低。工具主要用于离线文档迁移，吞吐量不是首要约束。
+使用 `jszip` 让导出流程可靠、跨浏览器、可维护。
 
-备选：并发处理。未采用，错误聚合和输出顺序更复杂。
+### 5. 视觉采用“扁平化蓝白阅读工具”
 
-### 4. 使用真实路径集合检测符号链接循环
-
-`realpath` + 已访问目录集合，可在跟随符号链接时识别循环并跳过，同时不影响普通文件扫描。
-
-### 5. 文件读写统一在 index.ts 和 batch.ts 处理
-
-`converter.ts` 只处理字符串，所有文件操作由调用方负责，编码和错误处理保持一致。
+不走高饱和、重渐变、重阴影路线，保持简洁和内容可读性。
 
 ## 风险与权衡
 
-- 符号链接扫描只对目录维护访问集合，避免因重复真实路径漏扫普通文件
-- `details/summary` 采用"加粗标题 + 展开正文"的固定输出策略，非标准 Markdown 一一映射
-- 未引入编译步骤，运行依赖 `tsx`；通过 `package.json` 提供明确脚本保证使用路径清晰
+- IndexedDB 适合单机场景，但不具备跨设备同步能力
+- 当前章节结构为单层列表，后续若支持分卷需要迁移数据模型
+- `rehypeRaw` 预览策略适合本地工具，但若未来接入外部内容分享，需要重新评估安全边界
+- Ant Design 主要承担交互弹窗职责，若后续扩大使用范围，需要进一步统一组件风格
