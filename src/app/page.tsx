@@ -1,5 +1,5 @@
-import BookApp from "@/components/books/BookApp";
+import BookShelf from "@/components/books/BookShelf";
 
 export default function HomePage() {
-  return <BookApp />;
+  return <BookShelf />;
 }

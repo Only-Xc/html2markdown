@@ -63,6 +63,7 @@ export interface BookRepository {
   renameChapter(bookId: string, chapterId: string, title: string): Promise<ChapterRecord>;
   deleteChapter(bookId: string, chapterId: string): Promise<void>;
   moveChapter(bookId: string, chapterId: string, direction: "up" | "down"): Promise<ChapterRecord[]>;
+  reorderChapters(bookId: string, orderedChapterIds: string[]): Promise<ChapterRecord[]>;
   updateChapterHtml(bookId: string, chapterId: string, html: string): Promise<ChapterRecord>;
   importBookBackup(backup: BookBackupManifest): Promise<BookRecord>;
 }

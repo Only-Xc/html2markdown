@@ -129,13 +129,13 @@ h6 {
   background: var(--muted-foreground);
 }
 
-/* Reader-like prose styles for markdown preview */
+/* Editor-style prose styles for markdown preview */
 .prose {
   max-width: none;
-  color: color-mix(in oklab, var(--foreground) 94%, #2a4365 6%);
-  font-family: var(--font-display);
-  font-size: 1.06rem;
-  line-height: 1.9;
+  color: color-mix(in oklab, var(--foreground) 95%, #24436d 5%);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.82;
 }
 
 .prose > *:first-child {
@@ -153,31 +153,31 @@ h6 {
 .prose h5,
 .prose h6 {
   color: var(--foreground);
-  font-family: var(--font-display);
+  font-family: var(--font-sans);
   font-weight: 700;
-  letter-spacing: 0.01em;
-  line-height: 1.3;
-  margin-top: 1.9em;
-  margin-bottom: 0.7em;
+  letter-spacing: -0.01em;
+  line-height: 1.28;
+  margin-top: 1.65em;
+  margin-bottom: 0.6em;
 }
 
 .prose h1 {
-  font-size: clamp(2rem, 4vw, 2.7rem);
-  line-height: 1.15;
+  font-size: clamp(2rem, 2.4vw, 2.75rem);
+  line-height: 1.12;
 }
 
 .prose h2 {
-  font-size: clamp(1.55rem, 3vw, 2rem);
-  padding-bottom: 0.35em;
+  font-size: clamp(1.45rem, 1.8vw, 2rem);
+  padding-bottom: 0.3em;
   border-bottom: 1px solid color-mix(in oklab, var(--border) 82%, white 18%);
 }
 
 .prose h3 {
-  font-size: 1.45rem;
+  font-size: 1.28rem;
 }
 
 .prose h4 {
-  font-size: 1.2rem;
+  font-size: 1.12rem;
 }
 
 .prose p,
@@ -187,11 +187,7 @@ h6 {
 .prose pre,
 .prose table,
 .prose hr {
-  margin: 1.05em 0;
-}
-
-.prose p {
-  text-align: justify;
+  margin: 0.92em 0;
 }
 
 .prose a {
@@ -207,10 +203,10 @@ h6 {
 }
 
 .prose code {
-  background: #eaf2ff;
-  padding: 0.14em 0.42em;
-  border: 1px solid #d9e8ff;
-  border-radius: 0.38rem;
+  background: #edf4ff;
+  padding: 0.16em 0.45em;
+  border: 1px solid #d7e5fb;
+  border-radius: 0.45rem;
   font-size: 0.85em;
   font-family: var(--font-mono);
 }
@@ -224,8 +220,8 @@ h6 {
 .prose pre {
   background: #0f1c31;
   color: #e8f1ff;
-  padding: 1rem 1.1rem;
-  border-radius: 0.9rem;
+  padding: 1rem 1.15rem;
+  border-radius: 0.8rem;
   overflow-x: auto;
   box-shadow: inset 0 0 0 1px rgba(141, 184, 255, 0.12);
 }
@@ -240,21 +236,85 @@ h6 {
 
 .prose blockquote {
   border-left: 3px solid #60a5fa;
-  padding: 0.2rem 0 0.2rem 1rem;
+  padding: 0.1rem 0 0.1rem 1rem;
   color: #5f7395;
-  font-style: italic;
 }
 
 .dark .prose blockquote {
   color: #a9bddf;
 }
 
+.prose ul,
+.prose ol {
+  padding-left: 1.5em;
+}
+
+.prose li {
+  margin: 0.32em 0;
+}
+
+.prose hr {
+  border: 0;
+  border-top: 1px solid color-mix(in oklab, var(--border) 85%, white 15%);
+}
+
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.prose th,
+.prose td {
+  border: 1px solid color-mix(in oklab, var(--border) 82%, white 18%);
+  padding: 0.7rem 0.8rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.prose th {
+  background: color-mix(in oklab, var(--muted) 92%, white 8%);
+  font-weight: 700;
+}
+
+.dark .prose th {
+  background: color-mix(in oklab, var(--muted) 82%, #081120 18%);
+}
+
+.prose-immersive {
+  font-size: 1.04rem;
+}
+
+.prose-immersive p,
+.prose-immersive ul,
+.prose-immersive ol {
+  max-width: 68rem;
+}
+
 .link-import-preview a {
   color: #2563eb;
 }
 
+.link-import-preview {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.link-import-preview > * {
+  max-width: 100%;
+}
+
 .link-import-preview img {
+  display: block;
   height: auto;
+  max-width: 100%;
+}
+
+.link-import-preview iframe,
+.link-import-preview video,
+.link-import-preview embed,
+.link-import-preview object {
+  display: block;
   max-width: 100%;
 }
 
@@ -263,14 +323,28 @@ h6 {
 }
 
 .link-import-preview table {
+  display: block;
   width: 100%;
   border-collapse: collapse;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.link-import-preview pre,
+.link-import-preview code {
+  max-width: 100%;
+}
+
+.link-import-preview pre {
+  overflow-x: auto;
+  white-space: pre-wrap;
 }
 
 .link-import-preview th,
 .link-import-preview td {
   border: 1px solid #e2e8f0;
   padding: 0.25rem 0.5rem;
+  word-break: break-word;
 }
 
 .dark .link-import-preview th,

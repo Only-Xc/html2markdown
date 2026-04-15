@@ -320,6 +320,40 @@ class IndexedDbBookRepository implements BookRepository {
     });
   }
 
+  async reorderChapters(bookId: string, orderedChapterIds: string[]): Promise<ChapterRecord[]> {
+    return withTransaction([BOOKS_STORE, CHAPTERS_STORE], "readwrite", async (transaction) => {
+      const chapterStore = transaction.objectStore(CHAPTERS_STORE);
+      const timestamp = new Date().toISOString();
+      const chapters = await listChaptersInTransaction(transaction, bookId);
+
+      if (chapters.length !== orderedChapterIds.length) {
+        throw new Error("章节排序数据不完整。");
+      }
+
+      const chapterMap = new Map(chapters.map((chapter) => [chapter.id, chapter]));
+      const reorderedChapters = orderedChapterIds.map((chapterId, index) => {
+        const chapter = chapterMap.get(chapterId);
+
+        if (!chapter) {
+          throw new Error("章节不存在。");
+        }
+
+        return {
+          ...chapter,
+          order: index,
+          updatedAt: timestamp,
+        } satisfies ChapterRecord;
+      });
+
+      reorderedChapters.forEach((chapter) => {
+        chapterStore.put(chapter);
+      });
+
+      await touchBook(transaction, bookId, timestamp);
+      return reorderedChapters;
+    });
+  }
+
   async updateChapterHtml(bookId: string, chapterId: string, html: string): Promise<ChapterRecord> {
     return withTransaction([BOOKS_STORE, CHAPTERS_STORE], "readwrite", async (transaction) => {
       const chapterStore = transaction.objectStore(CHAPTERS_STORE);

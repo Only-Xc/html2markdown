@@ -481,88 +481,98 @@ export default function LinkImportPanel({ onImport }: Props) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="border-b border-blue-100 bg-[#f8fbff] px-4 py-3 dark:border-[#1e3556] dark:bg-[#12243e]">
-        <div className="flex flex-wrap items-center gap-2">
+    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-white dark:bg-[#0b1220]">
+      <div className="border-b border-slate-200 bg-white px-5 py-3 dark:border-[#1a2a45] dark:bg-[#0d182a]">
+        <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-center">
           <Input
-            size="large"
+            size="middle"
             value={urlDraft}
             placeholder="输入网页链接，例如 https://example.com/article"
             onChange={(event) => setUrlDraft(event.target.value)}
             onPressEnter={() => void loadRemotePage()}
+            className="w-full min-w-0 flex-1"
           />
-          <Tooltip title="把目标网页载入 iframe，适合后续点选局部内容。" placement="top">
-            <span>
-              <Button
-                type="button"
-                className="h-10 rounded-full bg-blue-600 px-4 text-white hover:bg-blue-500"
-                disabled={status === "loading" || extracting}
-                onClick={() => void loadRemotePage()}
-              >
-                {status === "loading" ? <LoaderCircle className="size-4 animate-spin" /> : <ExternalLink className="size-4" />}
-                加载页面
-              </Button>
-            </span>
-          </Tooltip>
-          <Tooltip title="直接抽取文章主体，适合大多数博客、资讯和教程页面。" placement="top">
-            <span>
-              <Button
-                type="button"
-                variant="outline"
-                className="h-10 rounded-full border-blue-100 bg-white px-4 dark:border-[#24456d] dark:bg-[#0f1c31]"
-                disabled={status === "loading" || extracting}
-                onClick={() => void extractRemotePage()}
-              >
-                {extracting ? <LoaderCircle className="size-4 animate-spin" /> : <FileSearch className="size-4" />}
-                提取正文
-              </Button>
-            </span>
-          </Tooltip>
-          <Tooltip title="在 iframe 中点选页面元素，适合只导入某一块内容。" placement="top">
-            <span>
-              <Button
-                type="button"
-                variant="outline"
-                className="h-10 rounded-full border-blue-100 bg-white px-4 dark:border-[#24456d] dark:bg-[#0f1c31]"
-                disabled={status !== "loaded" || picking || extracting}
-                onClick={() => void startPicking()}
-              >
-                <SquareMousePointer className="size-4" />
-                进入选取
-              </Button>
-            </span>
-          </Tooltip>
-          <Tooltip title="停止当前点选模式，保留已加载页面。" placement="top">
-            <span>
-              <Button
-                type="button"
-                variant="outline"
-                className="h-10 rounded-full border-blue-100 bg-white px-4 dark:border-[#24456d] dark:bg-[#0f1c31]"
-                disabled={!picking}
-                onClick={stopPicking}
-              >
-                <MousePointerClick className="size-4" />
-                退出选取
-              </Button>
-            </span>
-          </Tooltip>
+          <div className="flex min-w-0 flex-wrap items-center gap-2 lg:flex-nowrap">
+            <Tooltip title="把目标网页载入 iframe，适合后续点选局部内容。" placement="top">
+              <span>
+                <Button
+                  type="button"
+                  className="h-9 rounded-full bg-blue-600 px-3.5 text-sm text-white hover:bg-blue-500"
+                  disabled={status === "loading" || extracting}
+                  onClick={() => void loadRemotePage()}
+                >
+                  {status === "loading" ? <LoaderCircle className="size-4 animate-spin" /> : <ExternalLink className="size-4" />}
+                  加载
+                </Button>
+              </span>
+            </Tooltip>
+            <Tooltip title="直接抽取文章主体，适合大多数博客、资讯和教程页面。" placement="top">
+              <span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 rounded-full border-blue-100 bg-white px-3.5 text-sm dark:border-[#24456d] dark:bg-[#0f1c31]"
+                  disabled={status === "loading" || extracting}
+                  onClick={() => void extractRemotePage()}
+                >
+                  {extracting ? <LoaderCircle className="size-4 animate-spin" /> : <FileSearch className="size-4" />}
+                  提取
+                </Button>
+              </span>
+            </Tooltip>
+            <Tooltip title="在 iframe 中点选页面元素，适合只导入某一块内容。" placement="top">
+              <span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 rounded-full border-blue-100 bg-white px-3.5 text-sm dark:border-[#24456d] dark:bg-[#0f1c31]"
+                  disabled={status !== "loaded" || picking || extracting}
+                  onClick={() => void startPicking()}
+                >
+                  <SquareMousePointer className="size-4" />
+                  选取
+                </Button>
+              </span>
+            </Tooltip>
+            <Tooltip title="停止当前点选模式，保留已加载页面。" placement="top">
+              <span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 rounded-full border-blue-100 bg-white px-3.5 text-sm dark:border-[#24456d] dark:bg-[#0f1c31]"
+                  disabled={!picking}
+                  onClick={stopPicking}
+                >
+                  <MousePointerClick className="size-4" />
+                  停止
+                </Button>
+              </span>
+            </Tooltip>
+          </div>
         </div>
-        <Typography.Text className="mt-3 block text-xs leading-6 text-slate-600 dark:text-slate-300">
-          {helperText}
-        </Typography.Text>
+        <div className="mt-2 flex min-h-5 min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <Typography.Text className="block min-w-0 flex-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">
+            {helperText}
+          </Typography.Text>
+          {loadedUrl ? (
+            <Typography.Text className="max-w-full truncate rounded-full bg-slate-100 px-2 py-0.5 text-[11px] leading-5 text-slate-400 dark:bg-white/5 dark:text-slate-500 lg:max-w-[48%]">
+              {loadedUrl}
+            </Typography.Text>
+          ) : null}
+        </div>
         {error ? (
-          <div className="mt-3 rounded-2xl border border-red-300/60 bg-red-50 px-3 py-2 text-xs leading-6 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200">
+          <div className="mt-2 rounded-xl border border-red-300/60 bg-red-50 px-3 py-2 text-[11px] leading-5 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200">
             {error}
           </div>
         ) : null}
       </div>
 
-      <div className="min-h-0 flex-1 bg-[#f8fbff] p-4 dark:bg-[#0f1c31]">
+      <div className="min-h-0 min-w-0 flex-1 overflow-hidden bg-[#f4f7fb] p-3 dark:bg-[#0b1220]">
         {previewFragment ? (
-          <div className="flex h-full min-h-[320px] flex-col overflow-hidden rounded-[24px] border border-blue-100 bg-white dark:border-[#24456d] dark:bg-[#12243e]">
-            <div className="border-b border-blue-100 px-4 py-3 dark:border-[#24456d]">
+          <div className="flex h-full min-h-[320px] min-w-0 flex-col overflow-hidden border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-[#1a2a45] dark:bg-[#101a2d]">
+            <div className="border-b border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-[#1a2a45] dark:bg-[#0d182a]">
               {previewFragment.mode === "picked" && previewFragment.path ? (
-                <div className="mb-3 overflow-auto rounded-2xl bg-[#f8fbff] px-3 py-2 font-mono text-xs leading-6 text-slate-600 dark:bg-[#0f1c31] dark:text-slate-300">
+                <div className="mb-2 max-h-20 overflow-auto border border-slate-200 bg-white px-3 py-1.5 font-mono text-[11px] leading-5 text-slate-600 break-all dark:border-[#1a2a45] dark:bg-[#0b1220] dark:text-slate-300">
                   {previewFragment.path}
                 </div>
               ) : null}
@@ -571,7 +581,7 @@ export default function LinkImportPanel({ onImport }: Props) {
                   <Button
                     type="button"
                     variant="outline"
-                    className="rounded-full border-blue-100 bg-white px-4 dark:border-[#24456d] dark:bg-[#0f1c31]"
+                    className="h-8 rounded-full border-slate-200 bg-white px-3.5 text-sm dark:border-[#24456d] dark:bg-[#0f1c31]"
                     disabled={extracting}
                     onClick={() => void extractRemotePage()}
                   >
@@ -583,7 +593,7 @@ export default function LinkImportPanel({ onImport }: Props) {
                     <Button
                       type="button"
                       variant="outline"
-                      className="rounded-full border-blue-100 bg-white px-4 dark:border-[#24456d] dark:bg-[#0f1c31]"
+                      className="h-8 rounded-full border-slate-200 bg-white px-3.5 text-sm dark:border-[#24456d] dark:bg-[#0f1c31]"
                       onClick={() => setPreviewFragment(null)}
                     >
                       <ChevronLeft className="size-4" />
@@ -592,7 +602,7 @@ export default function LinkImportPanel({ onImport }: Props) {
                     <Button
                       type="button"
                       variant="outline"
-                      className="rounded-full border-blue-100 bg-white px-4 dark:border-[#24456d] dark:bg-[#0f1c31]"
+                      className="h-8 rounded-full border-slate-200 bg-white px-3.5 text-sm dark:border-[#24456d] dark:bg-[#0f1c31]"
                       disabled={(previewFragment.pickedLevelIndex ?? 0) <= 0}
                       onClick={() => movePickedLevel("child")}
                     >
@@ -602,7 +612,7 @@ export default function LinkImportPanel({ onImport }: Props) {
                     <Button
                       type="button"
                       variant="outline"
-                      className="rounded-full border-blue-100 bg-white px-4 dark:border-[#24456d] dark:bg-[#0f1c31]"
+                      className="h-8 rounded-full border-slate-200 bg-white px-3.5 text-sm dark:border-[#24456d] dark:bg-[#0f1c31]"
                       disabled={
                         !previewFragment.pickedLevels ||
                         (previewFragment.pickedLevelIndex ?? 0) >= previewFragment.pickedLevels.length - 1
@@ -616,7 +626,7 @@ export default function LinkImportPanel({ onImport }: Props) {
                 )}
                 <Button
                   type="button"
-                  className="rounded-full bg-blue-600 px-4 text-white hover:bg-blue-500"
+                  className="h-8 rounded-full bg-blue-600 px-3.5 text-sm text-white hover:bg-blue-500"
                   onClick={applyPreviewFragment}
                 >
                   <WandSparkles className="size-4" />
@@ -625,12 +635,12 @@ export default function LinkImportPanel({ onImport }: Props) {
               </div>
             </div>
             <div
-              className="link-import-preview min-h-0 flex-1 overflow-auto px-4 py-4 text-sm leading-7 text-slate-700 dark:text-slate-200"
+              className="link-import-preview min-h-0 min-w-0 flex-1 overflow-auto bg-white px-5 py-4 text-sm leading-7 text-slate-700 dark:bg-[#101a2d] dark:text-slate-200"
               dangerouslySetInnerHTML={{ __html: previewFragment.html }}
             />
           </div>
         ) : (
-          <div className="h-full min-h-[320px] overflow-hidden rounded-[24px] border border-blue-100 bg-white isolate dark:border-[#24456d] dark:bg-[#12243e]">
+          <div className="h-full min-h-[320px] min-w-0 overflow-hidden border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] isolate dark:border-[#1a2a45] dark:bg-[#101a2d]">
             <FrameRender
               key={frameKey}
               ref={iframeRef}

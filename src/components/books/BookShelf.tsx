@@ -58,7 +58,7 @@ export default function BookShelf() {
       setCreateDraft("");
       setCreateModalOpen(false);
       message.success("书籍已创建。");
-      router.push(`/?bookId=${encodeURIComponent(book.id)}`);
+      router.push(`/books/${encodeURIComponent(book.id)}`);
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : "创建书籍失败。");
     } finally {
@@ -105,7 +105,7 @@ export default function BookShelf() {
       const importedBook = await repository.importBookBackup(backup);
       await loadBooks();
       message.success(`《${importedBook.title}》已导入书架。`);
-      router.push(`/?bookId=${encodeURIComponent(importedBook.id)}`);
+      router.push(`/books/${encodeURIComponent(importedBook.id)}`);
     } catch (importError) {
       setError(importError instanceof Error ? importError.message : "导入书籍失败。");
     } finally {
@@ -241,7 +241,7 @@ export default function BookShelf() {
                     <Trash2 className="size-4" />
                   </button>
 
-                  <Link href={`/?bookId=${encodeURIComponent(book.id)}`} className="block">
+                  <Link href={`/books/${encodeURIComponent(book.id)}`} className="block">
                     <div className={`aspect-[3/4] rounded-[24px] ${COVER_STYLES[index % COVER_STYLES.length]} p-3`}>
                       <div className="flex h-full flex-col justify-between rounded-[18px] border border-blue-100 bg-white/90 p-5 backdrop-blur-[1px] dark:border-[#355981] dark:bg-[linear-gradient(180deg,rgba(10,21,37,0.78)_0%,rgba(15,29,48,0.92)_100%)] dark:text-white">
                         <div className="flex items-center justify-between">

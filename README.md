@@ -25,7 +25,7 @@
 如果你已经部署了支持 Node 运行时的环境，可以把在线地址放在这里：
 
 ```text
-https://<your-name>.github.io/<your-repo>/
+https://<your-project>.vercel.app/
 ```
 
 ## 技术栈
@@ -105,17 +105,17 @@ npm run build
 
 ### 4. 通过网页链接采集片段
 
-点击编辑区顶部的“链接采集”按钮，会弹出独立采集窗口。当前支持两条路径：
+点击编辑区顶部的“链接采集”按钮，会从右侧打开独立采集抽屉。抽屉会在桌面端优先提供更大的内容宽度，小屏下自动占满视口。当前支持两条路径：
 
 - `提取正文`：直接在服务端抽取文章主体，先预览，再确认导入
 - `进入选取`：把代理页面加载到同源 iframe 中，点选 DOM 片段后先预览，再确认导入
 
-在片段选取模式下，系统还会展示完整标签路径，并支持切换到父标签，方便快速扩大选区。
+在片段选取模式下，系统还会展示完整标签路径，并支持切换到父标签，方便快速扩大选区。抽屉内部的预览区会自动约束图片、表格、代码块和长链接，避免外层出现横向滚动条。
 
 说明：
 
 - 第一版只支持公开网页，不支持登录态网站
-- 该能力依赖服务端代理，不能再以纯静态站点方式部署
+- 该能力依赖服务端代理，需要部署在支持 Node 运行时的平台上
 - 复杂动态站点是否可完整运行，取决于目标页面脚本与资源请求行为
 - 对被风控拦截的网站，系统会直接提示验证/拦截错误，而不是误报 iframe 超时
 - 详细实现见 [docs/link-import-guide.md](./docs/link-import-guide.md)
@@ -144,12 +144,14 @@ npm run build
 ```text
 src/
   app/
+    books/
+      [bookId]/
+        page.tsx
     page.tsx
     layout.tsx
     globals.css
   components/
     books/
-      BookApp.tsx
       BookShelf.tsx
       BookWorkspace.tsx
     HtmlEditor.tsx
@@ -170,6 +172,7 @@ src/
 - [docs/design.md](./docs/design.md)
 - [docs/spec.md](./docs/spec.md)
 - [docs/link-import-guide.md](./docs/link-import-guide.md)
+- [docs/ui-layout-rules.md](./docs/ui-layout-rules.md)
 - [CLAUDE.md](./CLAUDE.md)
 
 ## 当前约束
