@@ -2,10 +2,13 @@
   "name": "html2md",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "npm@11.11.0",
   "scripts": {
     "dev": "next dev",
-    "build": "NEXT_DIST_DIR=.next-build next build",
-    "start": "NEXT_DIST_DIR=.next-build next start",
+    "build": "next build",
+    "build:local": "NEXT_DIST_DIR=.next-build next build",
+    "start": "next start",
+    "start:local": "NEXT_DIST_DIR=.next-build next start",
     "lint": "next lint",
     "test": "node --import tsx --test src/test/**/*.test.ts"
   },

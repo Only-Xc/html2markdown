@@ -7,14 +7,17 @@
 ```bash
 npm install
 npm run dev     # 访问 http://localhost:3000
-npm run build   # 输出到 .next-build，不污染 dev 使用的 .next
-npm start       # 读取 .next-build
+npm run build   # 标准 Next.js / Vercel 构建，输出到 .next
+npm start       # 读取 .next
+npm run build:local  # 本地隔离构建，输出到 .next-build
+npm run start:local  # 读取 .next-build
 ```
 
 ### 开发产物隔离
 
 - `next dev` 固定使用 `.next`
-- `npm run build` / `npm start` 固定使用 `.next-build`
+- `npm run build` / `npm start` 使用标准 `.next`，与 Vercel 保持一致
+- `npm run build:local` / `npm run start:local` 使用 `.next-build`
 - 不要再让开发态和构建态共享同一个产物目录，否则会导致热更新、路由清单和模块解析异常
 - 代理采集功能调试时，优先执行 `npm test`；只有在明确需要验证生产构建时才运行 `npm run build`
 - 执行可能影响开发环境的命令前，先提醒用户本次会不会触碰 `.next` 或 dev 进程

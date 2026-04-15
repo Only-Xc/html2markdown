@@ -451,7 +451,8 @@ zip 内内容：
 为避免 `next dev` 与 `next build` 互相污染，项目约定：
 
 - `next dev` 使用 `.next`
-- `npm run build` / `npm start` 使用 `.next-build`
+- `npm run build` / `npm start` 使用标准 `.next`
+- `npm run build:local` / `npm run start:local` 使用 `.next-build`
 
 这样可以避免：
 
