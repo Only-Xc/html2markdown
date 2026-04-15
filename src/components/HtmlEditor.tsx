@@ -2,15 +2,16 @@
 
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Upload, Trash2 } from "lucide-react";
+import { Link2, Trash2, Upload } from "lucide-react";
 
 interface Props {
   value: string;
   onChange: (value: string) => void;
   onClear: () => void;
+  onOpenLinkImport: () => void;
 }
 
-export default function HtmlEditor({ value, onChange, onClear }: Props) {
+export default function HtmlEditor({ value, onChange, onClear, onOpenLinkImport }: Props) {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -67,6 +68,15 @@ export default function HtmlEditor({ value, onChange, onClear }: Props) {
           >
             <Upload className="size-3" />
             上传文件
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 rounded-full border-blue-100 bg-white text-xs dark:border-[#24456d] dark:bg-[#0f1c31]"
+            onClick={onOpenLinkImport}
+          >
+            <Link2 className="size-3" />
+            链接采集
           </Button>
           <Button
             variant="outline"

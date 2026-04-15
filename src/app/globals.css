@@ -249,6 +249,35 @@ h6 {
   color: #a9bddf;
 }
 
+.link-import-preview a {
+  color: #2563eb;
+}
+
+.link-import-preview img {
+  height: auto;
+  max-width: 100%;
+}
+
+.link-import-preview p {
+  margin: 0.75rem 0;
+}
+
+.link-import-preview table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.link-import-preview th,
+.link-import-preview td {
+  border: 1px solid #e2e8f0;
+  padding: 0.25rem 0.5rem;
+}
+
+.dark .link-import-preview th,
+.dark .link-import-preview td {
+  border-color: #35557f;
+}
+
 .prose table {
   width: 100%;
   border-collapse: collapse;

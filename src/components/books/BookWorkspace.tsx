@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { startTransition, useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
 import { ArrowLeft, BookOpenText, Check, Download, FileText, ListTree, Moon, PenSquare, Plus, Sun, Trash2 } from "lucide-react";
 import HtmlEditor from "@/components/HtmlEditor";
+import LinkImportPanel from "@/components/LinkImportPanel";
 import MarkdownPreview from "@/components/MarkdownPreview";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -75,6 +76,7 @@ export default function BookWorkspace({ bookId }: Props) {
   const [chapterTitleModalOpen, setChapterTitleModalOpen] = useState(false);
   const [chapterTitleDraft, setChapterTitleDraft] = useState("");
   const [renamingChapter, setRenamingChapter] = useState<ChapterRecord | null>(null);
+  const [linkImportModalOpen, setLinkImportModalOpen] = useState(false);
   const deferredHtml = useDeferredValue(draftHtml);
   const selectedChapter = chapters.find((chapter) => chapter.id === selectedChapterId) ?? null;
   const liveMarkdown = deferredHtml.trim() === "" ? "" : convert(deferredHtml);
@@ -535,7 +537,16 @@ export default function BookWorkspace({ bookId }: Props) {
             <div className="min-h-0 flex-1">
               {selectedChapter ? (
                 panel === "edit" ? (
-                  <HtmlEditor value={draftHtml} onChange={setDraftHtml} onClear={() => setDraftHtml("")} />
+                  <div className="flex h-full min-h-0 flex-col">
+                    <div className="min-h-0 flex-1">
+                      <HtmlEditor
+                        value={draftHtml}
+                        onChange={setDraftHtml}
+                        onClear={() => setDraftHtml("")}
+                        onOpenLinkImport={() => setLinkImportModalOpen(true)}
+                      />
+                    </div>
+                  </div>
                 ) : (
                   <MarkdownPreview markdown={liveMarkdown} title={selectedChapter.title} />
                 )
@@ -544,7 +555,7 @@ export default function BookWorkspace({ bookId }: Props) {
                   <FileText className="size-10 text-blue-300 dark:text-blue-300/70" />
                   <h3 className="mt-4 text-xl font-semibold text-slate-900 dark:text-white">还没有可编辑的章节</h3>
                   <p className="mt-2 max-w-lg text-sm leading-7 text-slate-600 dark:text-slate-300">
-                    新建章节后，你可以直接粘贴 HTML、上传 HTML 文件，并在预览模式下查看自动转换出的 Markdown。
+                    新建章节后，你可以直接粘贴 HTML、上传 HTML 文件，或者通过上传文件旁的链接采集按钮抓取页面片段，再在预览模式下查看自动转换出的 Markdown。
                   </p>
                   <Button className="mt-5 rounded-full bg-blue-600 px-5 text-white hover:bg-blue-500" onClick={() => void handleCreateChapter()}>
                     <Plus className="size-4" />
@@ -600,6 +611,25 @@ export default function BookWorkspace({ bookId }: Props) {
             value={chapterTitleDraft}
             onChange={(event) => setChapterTitleDraft(event.target.value)}
             onPressEnter={() => void handleConfirmRenameChapter()}
+          />
+        </div>
+      </Modal>
+
+      <Modal
+        title="链接采集"
+        open={linkImportModalOpen}
+        footer={null}
+        width={1200}
+        onCancel={() => setLinkImportModalOpen(false)}
+        destroyOnHidden
+        styles={{ body: { padding: 0 } }}
+      >
+        <div className="h-[75vh] min-h-[560px]">
+          <LinkImportPanel
+            onImport={(html) => {
+              setDraftHtml(html);
+              setLinkImportModalOpen(false);
+            }}
           />
         </div>
       </Modal>
