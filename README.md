@@ -30,6 +30,7 @@ https://<your-project>.vercel.app/
 
 ## 技术栈
 
+- Monorepo + `pnpm workspace`
 - Next.js 15
 - React 19
 - TypeScript
@@ -72,8 +73,8 @@ https://<your-project>.vercel.app/
 ## 本地开发
 
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 默认访问：
@@ -85,8 +86,15 @@ http://localhost:3000
 其他常用命令：
 
 ```bash
-npm test
-npm run build
+pnpm test
+pnpm build
+```
+
+独立转换包的常用命令：
+
+```bash
+pnpm test:core
+pnpm --filter @html2md/core build
 ```
 
 ## 使用方式
@@ -101,14 +109,21 @@ npm run build
 
 ### 3. 粘贴或导入 HTML
 
-在编辑区直接粘贴 HTML，或者上传 `.html/.htm` 文件。系统会自动保存，并生成对应 Markdown。
+进入章节后，工作台默认展示 Markdown 预览。切换到编辑模式后，可以直接粘贴 HTML，或者上传 `.html/.htm` 文件。系统会自动保存，并生成对应 Markdown。
 
 ### 4. 通过网页链接采集片段
 
-点击编辑区顶部的“链接采集”按钮，会从右侧打开独立采集抽屉。抽屉会在桌面端优先提供更大的内容宽度，小屏下自动占满视口。当前支持两条路径：
+切换到编辑模式后，点击顶部的“链接采集”按钮，会从右侧打开独立采集抽屉。抽屉会在桌面端优先提供更大的内容宽度，小屏下自动占满视口。当前支持两条路径：
 
 - `提取正文`：直接在服务端抽取文章主体，先预览，再确认导入
 - `进入选取`：把代理页面加载到同源 iframe 中，点选 DOM 片段后先预览，再确认导入
+
+当前这条链路已经补了稳定性优化：
+
+- 同类重复请求会自动忽略，旧请求结果不会覆盖最新一次操作
+- iframe 只有在页面真实可访问、可渲染时才会进入“可选取”状态
+- 提取失败、风控拦截、超时、非 HTML 响应会分别给出更明确的错误提示
+- 正文提取会优先选择更像正文的候选区域，减少误抓到短碎片或外围容器
 
 在片段选取模式下，系统还会展示完整标签路径，并支持切换到父标签，方便快速扩大选区。抽屉内部的预览区会自动约束图片、表格、代码块和长链接，避免外层出现横向滚动条。
 
@@ -122,7 +137,7 @@ npm run build
 
 ### 5. 预览 Markdown
 
-切换到预览模式，可以查看阅读化排版的 Markdown 渲染结果，也可以复制或下载当前章节的 `.md` 文件。
+进入章节后默认就是预览模式。你可以直接查看阅读化排版的 Markdown 渲染结果，也可以复制或下载当前章节的 `.md` 文件；需要修改 HTML 时，再切换到编辑模式。
 
 ### 6. 导出整本书
 
@@ -142,28 +157,33 @@ npm run build
 ## 项目结构
 
 ```text
-src/
-  app/
-    books/
-      [bookId]/
-        page.tsx
-    page.tsx
-    layout.tsx
-    globals.css
-  components/
-    books/
-      BookShelf.tsx
-      BookWorkspace.tsx
-    HtmlEditor.tsx
-    MarkdownPreview.tsx
-  lib/
-    converter.ts
-    books/
-      export.ts
-      model.ts
-      repository.ts
-      types.ts
+apps/
+  web/
+    src/
+      app/
+      components/
+      lib/
+packages/
+  core/
+    src/
+      index.ts
+    test/
 ```
+
+- `apps/web` 是当前书架应用
+- `packages/core` 是独立的 HTML 转 Markdown 包
+
+## 复用 `@html2md/core`
+
+```ts
+import { convert } from "@html2md/core";
+
+const markdown = convert("<h1>Hello</h1><p>World</p>");
+```
+
+`@html2md/core` 当前提供稳定入口：
+
+- `convert(html: string): string`
 
 ## 设计说明
 

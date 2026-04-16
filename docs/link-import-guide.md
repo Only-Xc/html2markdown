@@ -1,17 +1,19 @@
 # 链接采集增强说明
 
-**更新日期：** 2026-04-15
+**更新日期：** 2026-04-18
 
 本文档只记录本轮“链接采集增强”的具体增量，通用能力请以 [design.md](./design.md) 和 [spec.md](./spec.md) 为准。
 
 本轮增量包括：
 
 - 入口改造：链接采集从主编辑区切换项改为右侧抽屉入口
+- 工作流调整：工作台默认展示 Markdown 预览，采集入口收敛到编辑模式
 - 交互收敛：提取与选取统一为“预览后导入”
 - 选区增强：片段选取支持完整路径展示与父级/子级切换
 - 页面说明收缩：改为一段简短说明 + 按钮悬浮提示
 - 开发态稳定性优化：代理 iframe 改为 `srcDoc` 注入
 - 布局修正：抽屉宽度扩展，并补齐富内容防溢出策略
+- 稳定性增强：请求竞态收紧、iframe 就绪判定更稳、接口错误分类更明确
 
 ## 1. 为什么要改
 
@@ -29,12 +31,15 @@
 
 ### 2.1 入口位置
 
+- 工作台默认展示 Markdown 预览
+- 用户切换到编辑模式后看到顶部工具区
 - 编辑态顶部工具区保留“上传文件”
 - 在其旁边提供“链接采集”
 - 点击后通过右侧 `Drawer` 打开独立采集工作区
 
 这样做的好处：
 
+- 默认先看转换结果，符合书稿整理场景
 - 不再占用主编辑区的常驻结构
 - 用户不需要离开当前章节上下文
 - 手动 HTML 输入保持简单
@@ -102,27 +107,55 @@ body > main.article-container > article.content > div.rich-text > p:nth-of-type(
    - 对预览区的长链接、图片、表格、代码块、嵌入媒体做最大宽度和换行约束
    - 让需要横向滚动的内容只在自身内部滚动，而不是把外层抽屉撑开
 
+### 2.7 稳定性与性能修正
+
+后续又补了一轮稳定性优化，核心目标是减少“旧请求覆盖新请求”“页面看起来加载了但其实不能选”“同一种失败提示过于模糊”。
+
+这轮做了三类收敛：
+
+1. 前端请求状态
+   - 同类重复点击时，只采纳最后一次请求结果
+   - 旧请求返回后不会覆盖当前界面
+   - 关闭抽屉、切换 URL、重新加载时统一清理旧 timeout 和旧 picker
+2. iframe 就绪判断
+   - 不再只依赖 `onLoad`
+   - 同时要求文档可访问、内容已渲染、选取器可初始化
+   - 页面未稳定就绪时，不允许启动选取
+3. 服务端错误分类
+   - 无效链接
+   - 上游请求失败
+   - 非 HTML 响应
+   - 风控拦截
+   - 上游超时
+   - 正文提取失败
+
+这样前端提示会更准确，用户也更容易判断下一步是“重试加载”“改用提取”还是“换页面”。
+
 ## 3. 这次实际改到的文件
 
-- `src/components/books/BookWorkspace.tsx`
+- `apps/web/src/components/books/BookWorkspace.tsx`
   - 新增并管理链接采集抽屉
   - 调整抽屉宽度与溢出边界
-- `src/components/LinkImportPanel.tsx`
+- `apps/web/src/components/LinkImportPanel.tsx`
   - 链接采集主界面
   - 双路径逻辑
   - 预览与导入控制
   - 标签路径与父级切换
   - 页面说明与 Tooltip 提示
   - 响应式顶部布局与内容区收缩策略
-- `src/app/globals.css`
+- `apps/web/src/app/globals.css`
   - 链接采集预览区的富内容防溢出规则
-- `src/app/api/proxy/page/route.ts`
+- `apps/web/src/app/api/proxy/page/route.ts`
   - 代理页面抓取
   - 风控识别
-- `src/app/api/proxy/extract/route.ts`
+- `apps/web/src/app/api/proxy/extract/route.ts`
   - 新增正文提取接口
-- `src/lib/proxy.ts`
+  - 补齐错误码与超时分类
+- `apps/web/src/app/api/proxy/resource/route.ts`
+  - 资源代理错误分类
+- `apps/web/src/lib/proxy.ts`
   - 选取结果路径与层级管理
+  - 正文候选评分与错误模型
 
 ## 4. 这次新增的关键数据结构
 
@@ -198,17 +231,32 @@ interface PickedLevel {
 2. 再构造成统一的预览结构
 3. 最终由导入动作决定是否写入章节
 
+### 5.3 链接采集里的竞态通常比算法更先出问题
+
+这轮后面发现，很多“抽取不稳定”其实先是状态管理问题：
+
+- 上一次请求比下一次更晚返回
+- iframe `onLoad` 触发了，但页面并未稳定可选
+- 用户在加载中再次点击，界面进入互相覆盖的状态
+
+比较稳的处理方式是：
+
+1. 每次远程操作都分配请求序号
+2. 只允许最新请求回写状态
+3. 页面 ready 要基于可访问性和内容存在来判断
+4. 关闭、重试、切换 URL 时统一清理旧状态
+
 ## 6. 学习建议
 
 如果后人要继续扩展这一块，建议先按下面顺序理解：
 
-1. 看 `src/components/books/BookWorkspace.tsx`
-   - 先理解采集抽屉是如何接入工作台的
-2. 看 `src/components/LinkImportPanel.tsx`
+1. 看 `apps/web/src/components/books/BookWorkspace.tsx`
+   - 先理解默认预览态、编辑态切换，以及采集抽屉是如何接入工作台的
+2. 看 `apps/web/src/components/LinkImportPanel.tsx`
    - 这是主流程核心
-3. 看 `src/lib/proxy.ts`
+3. 看 `apps/web/src/lib/proxy.ts`
    - 理解链接采集底层工具函数
-4. 看 `src/app/api/proxy/page/route.ts` 与 `src/app/api/proxy/extract/route.ts`
+4. 看 `apps/web/src/app/api/proxy/page/route.ts` 与 `apps/web/src/app/api/proxy/extract/route.ts`
    - 理解这次增强依赖的服务端入口
 
 ## 7. 后续可扩展方向

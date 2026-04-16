@@ -1,0 +1,42 @@
+{
+  "name": "@html2md/core",
+  "version": "0.1.0",
+  "description": "Reusable HTML to Markdown conversion package extracted from html2md.",
+  "keywords": [
+    "html",
+    "markdown",
+    "turndown",
+    "converter"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --import tsx --test test/**/*.test.ts",
+    "bench": "node --import tsx scripts/benchmark.ts"
+  },
+  "dependencies": {
+    "turndown": "^7.2.1",
+    "turndown-plugin-gfm": "^1.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "@types/turndown": "^5.0.5",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,4 +1,4 @@
-import { convert } from "@/lib/converter";
+import { convert } from "@html2md/core";
 import type { ChapterRecord } from "@/lib/books/types";
 
 export function normalizeBookTitle(title: string): string {

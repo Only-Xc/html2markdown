@@ -6,9 +6,11 @@ import {
   buildProxyResourceUrl,
   detectUpstreamInterruption,
   extractReadableFragment,
+  fetchWithTimeout,
   getTargetUrlFromProxyPageUrl,
   getTargetUrlFromProxyResourceUrl,
   normalizeTargetUrl,
+  ProxyRequestError,
   rewriteHtmlForProxy,
 } from "../lib/proxy.js";
 
@@ -157,4 +159,72 @@ test("extractReadableFragment keeps the main article content and absolutizes ass
   assert.match(extracted.html, /https:\/\/example\.com\/images\/cover\.jpg/);
   assert.doesNotMatch(extracted.html, /site nav/);
   assert.doesNotMatch(extracted.html, /related links/);
+});
+
+test("extractReadableFragment prefers the actual best matching element instead of the first selector hit", () => {
+  const html = `
+    <html>
+      <body>
+        <article class="article-content">
+          <p>短内容。</p>
+        </article>
+        <article class="article-content">
+          <h1>Better Story</h1>
+          <p>第一段正文足够长，包含更多标点、句子和可读文本，用来证明它才是真正应该被选中的正文区域。</p>
+          <p>第二段继续补充，确保内容密度和段落数明显高于前一个候选区域。</p>
+        </article>
+      </body>
+    </html>
+  `;
+
+  const extracted = extractReadableFragment(html, "https://example.com/story");
+
+  assert.ok(extracted);
+  assert.match(extracted.html, /Better Story/);
+  assert.doesNotMatch(extracted.html, /短内容/);
+});
+
+test("extractReadableFragment removes noisy cookie and social regions", () => {
+  const html = `
+    <html>
+      <body>
+        <main class="article-content">
+          <div class="cookie-banner">accept all cookies</div>
+          <article>
+            <p>正文段落一，包含足够多的文本和标点，让抽取器继续识别为有效正文，而且这里补充更多句子来拉高文本长度和段落密度。</p>
+            <p>正文段落二，继续补充内容，避免被识别成过短碎片，同时保证正文主体明显强于外围的 cookie 和 share 噪音区域。</p>
+          </article>
+          <div class="social-share">share it</div>
+        </main>
+      </body>
+    </html>
+  `;
+
+  const extracted = extractReadableFragment(html, "https://example.com/story");
+
+  assert.ok(extracted);
+  assert.doesNotMatch(extracted.html, /accept all cookies/);
+  assert.doesNotMatch(extracted.html, /share it/);
+});
+
+test("fetchWithTimeout classifies abort errors as upstream timeout", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => {
+    throw new DOMException("Aborted", "AbortError");
+  };
+
+  try {
+    await assert.rejects(
+      () => fetchWithTimeout("https://example.com", undefined, { label: "正文提取上游请求", timeoutMs: 10 }),
+      (error: unknown) => {
+        assert.ok(error instanceof ProxyRequestError);
+        assert.equal(error.code, "upstream_timeout");
+        assert.equal(error.status, 504);
+        assert.match(error.message, /正文提取上游请求超时/);
+        return true;
+      },
+    );
+  } finally {
+    global.fetch = originalFetch;
+  }
 });

@@ -1,5 +1,12 @@
 import { NextRequest } from "next/server";
-import { detectUpstreamInterruption, fetchWithTimeout, isHtmlContentType, normalizeTargetUrl, rewriteHtmlForProxy } from "@/lib/proxy";
+import {
+  detectUpstreamInterruption,
+  fetchWithTimeout,
+  getProxyErrorDetails,
+  isHtmlContentType,
+  normalizeTargetUrl,
+  rewriteHtmlForProxy,
+} from "@/lib/proxy";
 
 export const runtime = "nodejs";
 
@@ -7,19 +14,24 @@ export async function GET(request: NextRequest) {
   const targetUrl = request.nextUrl.searchParams.get("url");
 
   if (!targetUrl) {
-    return Response.json({ error: "缺少 url 参数。" }, { status: 400 });
+    return Response.json({ error: "缺少 url 参数。", code: "missing_url" }, { status: 400 });
   }
 
   try {
     const normalizedUrl = normalizeTargetUrl(targetUrl);
-    const upstream = await fetchWithTimeout(normalizedUrl);
+    const upstream = await fetchWithTimeout(normalizedUrl, undefined, {
+      label: "代理页面上游请求",
+    });
 
     if (!upstream.ok) {
-      return Response.json({ error: `上游页面请求失败：${upstream.status}` }, { status: upstream.status });
+      return Response.json(
+        { error: `上游页面请求失败：${upstream.status}`, code: "upstream_request_failed" },
+        { status: upstream.status },
+      );
     }
 
     if (!isHtmlContentType(upstream.headers.get("content-type"))) {
-      return Response.json({ error: "目标地址返回的不是 HTML 页面。" }, { status: 415 });
+      return Response.json({ error: "目标地址返回的不是 HTML 页面。", code: "unsupported_content_type" }, { status: 415 });
     }
 
     const html = await upstream.text();
@@ -46,11 +58,11 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
+    const errorDetails = getProxyErrorDetails(error, "代理页面加载失败。", "proxy_request_failed");
+
     return Response.json(
-      {
-        error: error instanceof Error ? error.message : "代理页面加载失败。",
-      },
-      { status: 500 },
+      errorDetails,
+      { status: errorDetails.status },
     );
   }
 }

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { buildForwardHeaders, fetchWithTimeout, normalizeTargetUrl } from "@/lib/proxy";
+import { buildForwardHeaders, fetchWithTimeout, getProxyErrorDetails, normalizeTargetUrl } from "@/lib/proxy";
 
 export const runtime = "nodejs";
 
@@ -7,7 +7,7 @@ async function handleRequest(request: NextRequest) {
   const targetUrl = request.nextUrl.searchParams.get("url");
 
   if (!targetUrl) {
-    return Response.json({ error: "缺少 url 参数。" }, { status: 400 });
+    return Response.json({ error: "缺少 url 参数。", code: "missing_url" }, { status: 400 });
   }
 
   try {
@@ -27,6 +27,8 @@ async function handleRequest(request: NextRequest) {
       method: request.method,
       body: requestBody,
       headers: upstreamHeaders,
+    }, {
+      label: "资源代理上游请求",
     });
     const body = request.method === "HEAD" ? null : await upstream.arrayBuffer();
 
@@ -35,11 +37,11 @@ async function handleRequest(request: NextRequest) {
       headers: buildForwardHeaders(upstream),
     });
   } catch (error) {
+    const errorDetails = getProxyErrorDetails(error, "资源代理失败。", "resource_proxy_failed");
+
     return Response.json(
-      {
-        error: error instanceof Error ? error.message : "资源代理失败。",
-      },
-      { status: 500 },
+      errorDetails,
+      { status: errorDetails.status },
     );
   }
 }

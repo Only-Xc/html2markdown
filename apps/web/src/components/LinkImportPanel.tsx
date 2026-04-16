@@ -18,6 +18,7 @@ interface Props {
 }
 
 type ImportStatus = "idle" | "loading" | "loaded" | "error";
+type RemoteAction = "extract" | "load";
 
 interface PickedLevel {
   html: string;
@@ -43,6 +44,8 @@ interface FramePickerWindow extends Window {
 }
 
 const FRAME_PICKER_LOADER_PATH = "/vendor/pick-dom-element/frame-loader.js";
+const MAX_PICKED_LEVELS = 8;
+const RESTORABLE_FRAGMENT_PATTERN = /\b(?:src|href|srcset|poster|action|data-html2md-original-href|data-html2md-original-action)=/i;
 const RESTORABLE_ATTRIBUTES: Array<{ selector: string; attribute: "src" | "href" | "poster" | "data" | "action"; originalAttribute?: string }> = [
   { selector: "img[src]", attribute: "src" },
   { selector: "script[src]", attribute: "src" },
@@ -58,6 +61,7 @@ const RESTORABLE_ATTRIBUTES: Array<{ selector: string; attribute: "src" | "href"
   { selector: "a[href]", attribute: "href", originalAttribute: "data-html2md-original-href" },
   { selector: "form[action]", attribute: "action", originalAttribute: "data-html2md-original-action" },
 ];
+const MEANINGFUL_PICK_TAGS = new Set(["article", "aside", "blockquote", "figure", "li", "main", "ol", "pre", "section", "table", "tbody", "thead", "tr", "ul"]);
 
 function shouldKeepLiteralUrl(value: string): boolean {
   return (
@@ -71,6 +75,10 @@ function shouldKeepLiteralUrl(value: string): boolean {
 }
 
 function restoreOriginalFragmentHtml(fragmentHtml: string, pageUrl: string, appOrigin: string): string {
+  if (!RESTORABLE_FRAGMENT_PATTERN.test(fragmentHtml)) {
+    return fragmentHtml;
+  }
+
   const parser = new DOMParser();
   const document = parser.parseFromString(`<body>${fragmentHtml}</body>`, "text/html");
 
@@ -152,7 +160,7 @@ function buildPickedLevels(element: Element, pageUrl: string, appOrigin: string)
   const ancestors: Element[] = [];
   let current: Element | null = element;
 
-  while (current && current.tagName) {
+  while (current && current.tagName && ancestors.length < MAX_PICKED_LEVELS) {
     const tagName = current.tagName.toLowerCase();
 
     if (["html", "head"].includes(tagName)) {
@@ -170,6 +178,13 @@ function buildPickedLevels(element: Element, pageUrl: string, appOrigin: string)
 
   for (let index = ancestors.length - 1; index >= 0; index -= 1) {
     const target = ancestors[index];
+    const tagName = target.tagName.toLowerCase();
+    const textLength = target.textContent?.trim().length ?? 0;
+
+    if (index !== ancestors.length - 1 && tagName !== "body" && !MEANINGFUL_PICK_TAGS.has(tagName) && textLength < 80) {
+      continue;
+    }
+
     const path = ancestors.slice(0, index + 1).map(formatElementSegment).join(" > ");
     levels.push({
       html: restoreOriginalFragmentHtml(target.outerHTML || "", pageUrl, appOrigin),
@@ -186,6 +201,10 @@ export default function LinkImportPanel({ onImport }: Props) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const pickerRef = useRef<{ stop: () => void } | null>(null);
   const readyTimeoutRef = useRef<number | null>(null);
+  const requestSequenceRef = useRef(0);
+  const activeRequestRef = useRef<{ action: RemoteAction; id: number; url: string } | null>(null);
+  const pendingFrameRequestIdRef = useRef<number | null>(null);
+  const frameHtmlRef = useRef("");
   const [urlDraft, setUrlDraft] = useState("");
   const [loadedUrl, setLoadedUrl] = useState("");
   const [status, setStatus] = useState<ImportStatus>("idle");
@@ -197,6 +216,14 @@ export default function LinkImportPanel({ onImport }: Props) {
   const [extracting, setExtracting] = useState(false);
 
   const helperText = useMemo(() => {
+    if (previewFragment?.mode === "picked") {
+      return "已生成选取预览，可切换父级或子级后再导入。";
+    }
+
+    if (previewFragment?.mode === "extracted") {
+      return "已提取正文内容，请确认后导入。";
+    }
+
     if (status === "loading") {
       return "正在加载代理页面...";
     }
@@ -210,31 +237,89 @@ export default function LinkImportPanel({ onImport }: Props) {
     }
 
     return "优先提取正文；需要局部内容时，先加载页面，再进入选取。";
-  }, [extracting, status]);
+  }, [extracting, previewFragment, status]);
+
+  useEffect(() => {
+    frameHtmlRef.current = frameHtml;
+  }, [frameHtml]);
 
   useEffect(() => {
     return () => {
-      if (readyTimeoutRef.current !== null) {
-        window.clearTimeout(readyTimeoutRef.current);
-      }
+      clearReadyTimeout();
       stopPicking();
     };
   }, []);
 
+  function clearReadyTimeout() {
+    if (readyTimeoutRef.current !== null) {
+      window.clearTimeout(readyTimeoutRef.current);
+      readyTimeoutRef.current = null;
+    }
+  }
+
+  function beginRequest(action: RemoteAction, url: string): number | null {
+    const currentRequest = activeRequestRef.current;
+
+    if (currentRequest && currentRequest.action === action && currentRequest.url === url) {
+      return null;
+    }
+
+    const requestId = requestSequenceRef.current + 1;
+    requestSequenceRef.current = requestId;
+    activeRequestRef.current = {
+      action,
+      id: requestId,
+      url,
+    };
+    return requestId;
+  }
+
+  function isLatestRequest(action: RemoteAction, requestId: number): boolean {
+    return activeRequestRef.current?.action === action && activeRequestRef.current.id === requestId;
+  }
+
+  function completeRequest(action: RemoteAction, requestId: number) {
+    if (isLatestRequest(action, requestId)) {
+      activeRequestRef.current = null;
+    }
+  }
+
+  function validateFrameReadiness(iframe: HTMLIFrameElement | null): boolean {
+    const doc = iframe?.contentDocument;
+    const body = doc?.body;
+    const bodyText = body?.textContent?.trim() ?? "";
+    const hasRenderableContent = (body?.children.length ?? 0) > 0 || bodyText !== "";
+
+    return Boolean(iframe?.contentWindow && doc?.documentElement && hasRenderableContent);
+  }
+
   async function loadRemotePage(urlInput?: string) {
+    let requestId: number | null = null;
+
     try {
+      const normalizedUrl = normalizeTargetUrl(urlInput ?? urlDraft);
+      requestId = beginRequest("load", normalizedUrl);
+
+      if (requestId === null) {
+        return;
+      }
+
+      clearReadyTimeout();
+      pendingFrameRequestIdRef.current = null;
       setStatus("loading");
       setError("");
       setPreviewFragment(null);
       stopPicking();
-
-      const normalizedUrl = normalizeTargetUrl(urlInput ?? urlDraft);
       const entryUrl = buildProxyPageUrl(normalizedUrl, window.location.origin);
       const previewResponse = await fetch(entryUrl, {
         headers: {
           accept: "text/html",
         },
       });
+
+      if (!isLatestRequest("load", requestId)) {
+        return;
+      }
 
       if (!previewResponse.ok) {
         let messageText = `代理页面加载失败：${previewResponse.status}`;
@@ -250,38 +335,65 @@ export default function LinkImportPanel({ onImport }: Props) {
       }
 
       const previewHtml = await previewResponse.text();
-      setLoadedUrl(normalizedUrl);
-      setUrlDraft(normalizedUrl);
-      setFrameHtml(previewHtml);
-      setFrameKey((value) => value + 1);
 
-      if (readyTimeoutRef.current !== null) {
-        window.clearTimeout(readyTimeoutRef.current);
+      if (!isLatestRequest("load", requestId)) {
+        return;
       }
 
+      setLoadedUrl(normalizedUrl);
+      setUrlDraft(normalizedUrl);
+      pendingFrameRequestIdRef.current = requestId;
+      setFrameHtml(previewHtml);
+      setFrameKey((value) => value + 1);
+      clearReadyTimeout();
       readyTimeoutRef.current = window.setTimeout(() => {
+        if (!requestId || !isLatestRequest("load", requestId) || pendingFrameRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        pendingFrameRequestIdRef.current = null;
+        completeRequest("load", requestId);
         setStatus("error");
         setError("代理 iframe 未能在预期时间内完成加载。目标站点脚本可能执行失败，或页面不适合被完整代理。");
       }, 12000);
     } catch (loadError) {
+      if (requestId !== null && !isLatestRequest("load", requestId)) {
+        return;
+      }
+
+      pendingFrameRequestIdRef.current = null;
+      if (requestId !== null) {
+        completeRequest("load", requestId);
+      }
       setStatus("error");
       setError(loadError instanceof Error ? loadError.message : "代理页面加载失败。");
     }
   }
 
   async function extractRemotePage(urlInput?: string) {
+    let requestId: number | null = null;
+
     try {
+      const normalizedUrl = normalizeTargetUrl(urlInput ?? urlDraft);
+      requestId = beginRequest("extract", normalizedUrl);
+
+      if (requestId === null) {
+        return;
+      }
+
       setExtracting(true);
       setError("");
       setPreviewFragment(null);
       stopPicking();
-
-      const normalizedUrl = normalizeTargetUrl(urlInput ?? urlDraft);
       const response = await fetch(`/api/proxy/extract?url=${encodeURIComponent(normalizedUrl)}`, {
         headers: {
           accept: "application/json",
         },
       });
+
+      if (!isLatestRequest("extract", requestId)) {
+        return;
+      }
 
       if (!response.ok) {
         let messageText = `正文提取失败：${response.status}`;
@@ -297,6 +409,11 @@ export default function LinkImportPanel({ onImport }: Props) {
       }
 
       const payload = (await response.json()) as { html: string; title?: string };
+
+      if (!isLatestRequest("extract", requestId)) {
+        return;
+      }
+
       setLoadedUrl(normalizedUrl);
       setUrlDraft(normalizedUrl);
       setPreviewFragment({
@@ -305,8 +422,15 @@ export default function LinkImportPanel({ onImport }: Props) {
       });
       message.success(payload.title ? `已提取正文：${payload.title}` : "已提取正文内容，请确认后导入。");
     } catch (extractError) {
+      if (requestId !== null && !isLatestRequest("extract", requestId)) {
+        return;
+      }
+
       setError(extractError instanceof Error ? extractError.message : "正文提取失败。");
     } finally {
+      if (requestId !== null) {
+        completeRequest("extract", requestId);
+      }
       setExtracting(false);
     }
   }
@@ -355,7 +479,7 @@ export default function LinkImportPanel({ onImport }: Props) {
       const iframe = iframeRef.current;
       const doc = iframe?.contentDocument;
 
-      if (!iframe?.contentWindow || !doc?.documentElement) {
+      if (!iframe?.contentWindow || !doc?.documentElement || !validateFrameReadiness(iframe)) {
         throw new Error("代理页面尚未准备好，暂时无法选取。");
       }
 
@@ -418,27 +542,43 @@ export default function LinkImportPanel({ onImport }: Props) {
   }
 
   function handleFrameLoad() {
-    if (!frameHtml) {
+    if (!frameHtmlRef.current || pendingFrameRequestIdRef.current === null) {
       return;
     }
 
     stopPicking();
+    clearReadyTimeout();
 
-    if (readyTimeoutRef.current !== null) {
-      window.clearTimeout(readyTimeoutRef.current);
-      readyTimeoutRef.current = null;
+    if (!validateFrameReadiness(iframeRef.current)) {
+      const pendingRequestId = pendingFrameRequestIdRef.current;
+      pendingFrameRequestIdRef.current = null;
+
+      if (pendingRequestId !== null) {
+        completeRequest("load", pendingRequestId);
+      }
+
+      setStatus("error");
+      setError("代理页面尚未稳定就绪。你可以重试加载，或直接使用正文提取。");
+      return;
     }
 
+    const pendingRequestId = pendingFrameRequestIdRef.current;
+    pendingFrameRequestIdRef.current = null;
+    if (pendingRequestId !== null) {
+      completeRequest("load", pendingRequestId);
+    }
     setStatus("loaded");
     setError("");
   }
 
   function handleFrameError() {
     stopPicking();
+    clearReadyTimeout();
 
-    if (readyTimeoutRef.current !== null) {
-      window.clearTimeout(readyTimeoutRef.current);
-      readyTimeoutRef.current = null;
+    const pendingRequestId = pendingFrameRequestIdRef.current;
+    pendingFrameRequestIdRef.current = null;
+    if (pendingRequestId !== null) {
+      completeRequest("load", pendingRequestId);
     }
 
     setStatus("error");

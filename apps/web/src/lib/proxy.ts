@@ -87,7 +87,51 @@ const REMOVABLE_CONTENT_SELECTORS = [
 ];
 
 const NOISY_CLASS_PATTERN =
-  /(comment|related|recommend|advert|ad-|ads|share|toolbar|breadcrumb|pagination|sidebar|aside|footer|header|mask|modal|popup|fixed|floating|subscribe|copyright)/i;
+  /(comment|related|recommend|advert|ad-|ads|share|toolbar|breadcrumb|pagination|sidebar|aside|footer|header|mask|modal|popup|fixed|floating|subscribe|copyright|cookie|banner|social|author|profile|avatar|meta|tag-list)/i;
+
+export type ProxyErrorCode =
+  | "invalid_target_url"
+  | "missing_url"
+  | "upstream_request_failed"
+  | "unsupported_content_type"
+  | "upstream_verification_required"
+  | "content_extraction_failed"
+  | "upstream_timeout"
+  | "proxy_request_failed"
+  | "resource_proxy_failed";
+
+export class ProxyRequestError extends Error {
+  code: ProxyErrorCode;
+  status: number;
+
+  constructor(message: string, code: ProxyErrorCode, status: number) {
+    super(message);
+    this.name = "ProxyRequestError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
+export function getProxyErrorDetails(
+  error: unknown,
+  fallbackMessage: string,
+  fallbackCode: ProxyErrorCode,
+  fallbackStatus = 500,
+): { error: string; code: ProxyErrorCode; status: number } {
+  if (error instanceof ProxyRequestError) {
+    return {
+      error: error.message,
+      code: error.code,
+      status: error.status,
+    };
+  }
+
+  return {
+    error: error instanceof Error ? error.message : fallbackMessage,
+    code: fallbackCode,
+    status: fallbackStatus,
+  };
+}
 
 function hasSupportedScheme(value: string): boolean {
   return /^(https?:)?\/\//i.test(value) || value.startsWith("/") || value.startsWith("./") || value.startsWith("../");
@@ -129,7 +173,7 @@ export function normalizeTargetUrl(input: string): string {
   const trimmed = input.trim();
 
   if (trimmed === "") {
-    throw new Error("请输入网页链接。");
+    throw new ProxyRequestError("请输入网页链接。", "invalid_target_url", 400);
   }
 
   let url: URL;
@@ -137,15 +181,15 @@ export function normalizeTargetUrl(input: string): string {
   try {
     url = new URL(trimmed);
   } catch {
-    throw new Error("请输入有效的网页链接。");
+    throw new ProxyRequestError("请输入有效的网页链接。", "invalid_target_url", 400);
   }
 
   if (!["http:", "https:"].includes(url.protocol)) {
-    throw new Error("仅支持 http 或 https 链接。");
+    throw new ProxyRequestError("仅支持 http 或 https 链接。", "invalid_target_url", 400);
   }
 
   if (isPrivateHost(url.hostname)) {
-    throw new Error("当前代理不允许访问本地或内网地址。");
+    throw new ProxyRequestError("当前代理不允许访问本地或内网地址。", "invalid_target_url", 400);
   }
 
   return url.toString();
@@ -326,7 +370,7 @@ export function buildProxyRuntimeScript(pageUrl: string, appOrigin: string): str
         if (input instanceof Request) {
           return originalFetch(new Request(rewriteToResource(input.url, currentUrl), input), init);
         }
-      }
+      } catch {}
 
       return originalFetch(input, init);
     };
@@ -407,6 +451,14 @@ function normalizeTextContent(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function resolveTargetUrlSafely(input: string, baseUrl: string): string | null {
+  try {
+    return resolveTargetUrl(input, baseUrl);
+  } catch {
+    return null;
+  }
+}
+
 function getElementSignalValue(rawValue: string | undefined): string {
   return rawValue ? rawValue.toLowerCase() : "";
 }
@@ -450,7 +502,13 @@ function rewriteExtractedFragmentUrls(root: ReturnType<typeof load>, containerSe
           return;
         }
 
-        current.attr(rule.attribute, resolveTargetUrl(sourceValue, pageUrl));
+        const resolved = resolveTargetUrlSafely(sourceValue, pageUrl);
+
+        if (!resolved) {
+          return;
+        }
+
+        current.attr(rule.attribute, resolved);
       });
   }
 
@@ -474,7 +532,10 @@ function rewriteExtractedFragmentUrls(root: ReturnType<typeof load>, containerSe
           }
 
           const [urlPart, descriptor] = trimmed.split(/\s+/, 2);
-          const resolvedUrl = resolveTargetUrl(urlPart, pageUrl);
+          const resolvedUrl = resolveTargetUrlSafely(urlPart, pageUrl);
+          if (!resolvedUrl) {
+            return trimmed;
+          }
           return descriptor ? `${resolvedUrl} ${descriptor}` : resolvedUrl;
         })
         .join(", ");
@@ -498,6 +559,7 @@ function scoreReadableCandidate(root: CheerioRoot, element: Parameters<CheerioRo
   const headingCount = current.find("h1, h2, h3").length;
   const imageCount = current.find("img, figure").length;
   const listCount = current.find("ul, ol").length;
+  const articleSignals = current.find("article, [role='main'], .article-content, .entry-content, .markdown-body").length;
   const linkTextLength = normalizeTextContent(
     current
       .find("a")
@@ -506,15 +568,32 @@ function scoreReadableCandidate(root: CheerioRoot, element: Parameters<CheerioRo
       .join(" "),
   ).length;
   const punctuationCount = (text.match(/[。！？；：,.!?;:]/g) ?? []).length;
+  const id = getElementSignalValue(current.attr("id"));
+  const className = getElementSignalValue(current.attr("class"));
+  const headingTextLength = normalizeTextContent(
+    current
+      .find("h1, h2, h3")
+      .toArray()
+      .map((node) => root(node).text())
+      .join(" "),
+  ).length;
+  const linkDensityPenalty = textLength > 0 ? (linkTextLength / textLength) * 260 : 0;
+  const noisyPenalty = NOISY_CLASS_PATTERN.test(`${id} ${className}`) ? 800 : 0;
+  const shortContentPenalty = textLength < 140 && paragraphCount < 2 ? 180 : 0;
 
   return (
     textLength +
     paragraphCount * 120 +
     headingCount * 60 +
+    articleSignals * 90 +
     imageCount * 35 +
     listCount * 30 +
+    headingTextLength * 0.2 +
     punctuationCount * 8 -
-    linkTextLength * 0.35
+    linkTextLength * 0.35 -
+    linkDensityPenalty -
+    noisyPenalty -
+    shortContentPenalty
   );
 }
 
@@ -529,7 +608,7 @@ export function extractReadableFragment(
     return null;
   }
 
-  let bestSelector: string | null = null;
+  let bestElementHtml: string | null = null;
   let bestScore = -1;
 
   for (const selector of READABILITY_CANDIDATE_SELECTORS) {
@@ -538,29 +617,28 @@ export function extractReadableFragment(
 
       if (score > bestScore) {
         bestScore = score;
-        bestSelector = $.html(element) ? selector : bestSelector;
+        bestElementHtml = $.html(element) ?? null;
       }
     });
   }
 
-  if (!bestSelector) {
+  if (!bestElementHtml) {
     body.find("article, main, section, div").each((_, element) => {
       const score = scoreReadableCandidate($, element);
 
       if (score > bestScore) {
         bestScore = score;
-        const candidateId = `html2md-candidate-${Math.random().toString(36).slice(2)}`;
-        $(element).attr("data-html2md-candidate", candidateId);
-        bestSelector = `[data-html2md-candidate="${candidateId}"]`;
+        bestElementHtml = $.html(element) ?? null;
       }
     });
   }
 
-  if (!bestSelector) {
+  if (!bestElementHtml) {
     return null;
   }
 
-  const fragment = $(bestSelector).first().clone();
+  const fragmentRoot = load(`<div id="html2md-fragment-root">${bestElementHtml}</div>`);
+  const fragment = fragmentRoot("#html2md-fragment-root").children().first().clone();
 
   if (fragment.length === 0) {
     return null;
@@ -587,9 +665,6 @@ export function extractReadableFragment(
   if (rootElement.find("h1").length === 0 && title !== "") {
     rootElement.prepend(`<h1>${title}</h1>`);
   }
-
-  rootElement.find("[data-html2md-candidate]").removeAttr("data-html2md-candidate");
-
   return {
     html: wrapper("#html2md-readable-root").html() ?? "",
     title,
@@ -646,9 +721,15 @@ export function rewriteHtmlForProxy(rawHtml: string, pageUrl: string, appOrigin:
   return $.html();
 }
 
-export async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
+export async function fetchWithTimeout(
+  url: string,
+  init?: RequestInit,
+  options?: { label?: string; timeoutMs?: number },
+): Promise<Response> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  const timeoutMs = options?.timeoutMs ?? 15000;
+  const label = options?.label ?? "上游请求";
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     return await fetch(url, {
@@ -663,6 +744,12 @@ export async function fetchWithTimeout(url: string, init?: RequestInit): Promise
         ...init?.headers,
       },
     });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ProxyRequestError(`${label}超时。`, "upstream_timeout", 504);
+    }
+
+    throw error;
   } finally {
     clearTimeout(timeoutId);
   }

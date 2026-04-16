@@ -1,10 +1,14 @@
 # html2md 设计文档
 
-**更新日期：** 2026-04-15
+**更新日期：** 2026-04-18
 
 ## 背景与目标
 
 当前项目已经从“单文件 HTML 转 Markdown 页面”演进为一个面向单用户、本机浏览器使用的书籍管理器。它的核心目标不再是一次性转换单个 HTML，而是帮助用户把多章 HTML 内容沉淀为一本结构化书籍，并在保存时持续生成 Markdown，最终打包导出。
+
+当前仓库已采用 monorepo 结构：
+- `apps/web` 承载书架应用
+- `packages/core` 承载可复用的 HTML 转 Markdown 能力
 
 **目标：**
 - 提供一个本地书架，用于创建、进入、删除书籍
@@ -23,6 +27,7 @@
 
 ## 技术栈
 
+- **仓库结构：** Monorepo + `pnpm workspace`
 - **框架：** Next.js App Router
 - **语言：** TypeScript
 - **运行时：** React 19 + Next.js 15
@@ -155,8 +160,8 @@
 ### 3. 编辑与自动保存
 
 当前章节在右侧工作区编辑：
+- 默认态：Markdown 预览
 - 编辑态：HTML 输入
-- 预览态：Markdown 预览
 
 每次输入变化后：
 - 若内容与持久化内容不同，则进入“未保存”状态
@@ -165,6 +170,11 @@
 - 保存成功后更新书籍 `updatedAt`
 
 切换章节前会先尝试冲刷待保存草稿，避免丢失。
+
+默认展示预览的原因：
+- 更符合“整理书稿”的阅读型工作流
+- 用户进入章节时可以先确认转换结果
+- HTML 修改入口继续保留在同一工作区内
 
 ### 4. 导出整本书
 
@@ -217,6 +227,13 @@ zip 内内容：
 
 两条路径统一进入预览态，只有点击“导入正文”后，才会覆盖当前章节 HTML。
 
+稳定性约束：
+
+- 同类重复请求只保留最后一次结果，旧请求不能回写当前状态
+- iframe 只有在文档可访问且内容可渲染时，才进入“页面已就绪”
+- 关闭抽屉、切换 URL、重新加载、重新提取时，会统一清理旧选取器、旧超时和旧预览状态
+- 风控、超时、非 HTML、正文提取失败会在接口层面输出稳定错误分类
+
 抽屉层面的布局约定：
 
 - 桌面端优先提供接近工作区的宽度，而不是窄工具栏式侧边栏
@@ -262,13 +279,13 @@ zip 内内容：
 当前策略：
 
 - 优先匹配 `article` / `main` / 常见正文类名
-- 对候选节点按文本长度、段落数、标题数、图片数、列表数评分
-- 移除导航、评论、推荐、广告等噪音区块
+- 对候选节点按文本长度、段落数、标题数、图片数、列表数、正文信号和链接密度评分
+- 移除导航、评论、推荐、广告、cookie banner、社交分享等噪音区块
 - 恢复图片、链接等资源的绝对地址
 
 ## 模块设计
 
-### `src/lib/converter.ts`
+### `packages/core/src/index.ts`
 
 负责 HTML 转 Markdown 的纯字符串转换。
 
@@ -279,14 +296,17 @@ zip 内内容：
 - 处理 `details/summary`
 - 移除样式、脚本、SVG 与平台代码块头部噪音
 
-### `src/lib/books/model.ts`
+**公开接口：**
+- `convert(html: string): string`
+
+### `apps/web/src/lib/books/model.ts`
 
 负责领域层纯逻辑：
 - 书名默认值规范化
 - 章节标题默认值规范化
 - 根据 HTML 生成更新后的章节 Markdown
 
-### `src/lib/books/repository.ts`
+### `apps/web/src/lib/books/repository.ts`
 
 负责 IndexedDB 仓储：
 - 书籍 CRUD
@@ -295,7 +315,7 @@ zip 内内容：
 - 排序与查询
 - HTML 保存时同步写入 Markdown
 
-### `src/lib/books/export.ts`
+### `apps/web/src/lib/books/export.ts`
 
 负责导出：
 - 章节文件名生成
@@ -304,7 +324,7 @@ zip 内内容：
 - `book.json` 生成与解析
 - zip 打包
 
-### `src/lib/proxy.ts`
+### `apps/web/src/lib/proxy.ts`
 
 负责链接采集底层能力：
 - 目标链接规范化
@@ -313,8 +333,9 @@ zip 内内容：
 - 风控识别
 - 正文提取
 - iframe 选取结果资源恢复
+- 错误分类与超时封装
 
-### `src/components/books/BookShelf.tsx`
+### `apps/web/src/components/books/BookShelf.tsx`
 
 负责书架页：
 - 书籍卡片渲染
@@ -322,17 +343,18 @@ zip 内内容：
 - 导入 `book.json`
 - 删除确认弹窗
 
-### `src/components/books/BookWorkspace.tsx`
+### `apps/web/src/components/books/BookWorkspace.tsx`
 
 负责工作台：
 - 书名修改
 - 章节列表交互
 - HTML 编辑与自动保存
 - Markdown 预览
+- 默认预览态与面板切换
 - 导出整本书
 - 链接采集抽屉管理
 
-### `src/components/HtmlEditor.tsx`
+### `apps/web/src/components/HtmlEditor.tsx`
 
 负责 HTML 输入：
 - 文本编辑
@@ -340,7 +362,7 @@ zip 内内容：
 - 拖拽导入
 - 清空内容
 
-### `src/components/LinkImportPanel.tsx`
+### `apps/web/src/components/LinkImportPanel.tsx`
 
 负责链接采集：
 - URL 输入
@@ -351,8 +373,9 @@ zip 内内容：
 - 标签路径展示
 - 父级 / 子级切换
 - 页面内说明与 Tooltip 引导
+- 前端请求竞态控制与 iframe 就绪判断
 
-### `src/components/MarkdownPreview.tsx`
+### `apps/web/src/components/MarkdownPreview.tsx`
 
 负责 Markdown 预览：
 - 预览渲染
@@ -451,8 +474,8 @@ zip 内内容：
 为避免 `next dev` 与 `next build` 互相污染，项目约定：
 
 - `next dev` 使用 `.next`
-- `npm run build` / `npm start` 使用标准 `.next`
-- `npm run build:local` / `npm run start:local` 使用 `.next-build`
+- `pnpm build` / `pnpm start` 使用标准 `.next`
+- `pnpm build:local` / `pnpm start:local` 使用 `.next-build`
 
 这样可以避免：
 

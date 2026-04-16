@@ -17,6 +17,7 @@ import {
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 import { App, Drawer, Input, Modal, Tooltip } from "antd";
+import { convert } from "@html2md/core";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, startTransition, useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
@@ -30,7 +31,6 @@ import { exportBookArchive } from "@/lib/books/export";
 import { getBookRepository } from "@/lib/books/repository";
 import type { BookRecord, ChapterRecord } from "@/lib/books/types";
 import { useThemeMode } from "@/lib/use-theme";
-import { convert } from "@/lib/converter";
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
 
@@ -222,7 +222,7 @@ export default function BookWorkspace({ bookId }: Props) {
   const [chapters, setChapters] = useState<ChapterRecord[]>([]);
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null);
   const [draftHtml, setDraftHtml] = useState("");
-  const [panel, setPanel] = useState<"edit" | "preview">("edit");
+  const [panel, setPanel] = useState<"edit" | "preview">("preview");
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
