@@ -911,11 +911,11 @@ export default function BookWorkspace({ bookId }: Props) {
         title="链接采集"
         open={linkImportModalOpen}
         placement="right"
-        width="min(960px, 100vw)"
+        size="min(960px, 100vw)"
         onClose={() => setLinkImportModalOpen(false)}
         destroyOnHidden
         styles={{
-          content: {
+          section: {
             overflow: "hidden",
           },
           body: {
